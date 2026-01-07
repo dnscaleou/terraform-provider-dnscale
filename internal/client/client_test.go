@@ -85,7 +85,7 @@ func TestCreateZone(t *testing.T) {
 			Status: "success",
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -132,7 +132,7 @@ func TestGetZone(t *testing.T) {
 			Status: "success",
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -197,7 +197,7 @@ func TestListZones(t *testing.T) {
 			Status: "success",
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -237,7 +237,7 @@ func TestCreateRecord(t *testing.T) {
 			Status: "success",
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -285,7 +285,7 @@ func TestGetRecord(t *testing.T) {
 			Status: "success",
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -350,7 +350,7 @@ func TestListRecords(t *testing.T) {
 			Status: "success",
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -381,7 +381,7 @@ func TestAPIError(t *testing.T) {
 				Message: "Zone name is invalid",
 			},
 		}
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -416,7 +416,7 @@ func TestGetDNSSECStatus(t *testing.T) {
 			Status: "success",
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -460,7 +460,7 @@ func TestCreateCryptokey(t *testing.T) {
 			Status: "success",
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
