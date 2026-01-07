@@ -1,0 +1,35 @@
+---
+page_title: "dnscale_zones Data Source - DNScale"
+subcategory: ""
+description: |-
+  Retrieves a list of all DNS zones in DNScale.
+---
+
+# dnscale_zones (Data Source)
+
+Retrieves a list of all DNS zones in DNScale.
+
+## Example Usage
+
+```terraform
+data "dnscale_zones" "all" {}
+
+output "zone_count" {
+  value = length(data.dnscale_zones.all.zones)
+}
+
+output "zone_names" {
+  value = [for z in data.dnscale_zones.all.zones : z.name]
+}
+```
+
+## Schema
+
+### Read-Only
+
+- `zones` (List of Object) - List of zones. Each zone has the following attributes:
+  - `id` (String) - The unique identifier for the zone (UUID).
+  - `name` (String) - The domain name for the zone.
+  - `region` (String) - The region where the zone is hosted.
+  - `type` (String) - The zone type.
+  - `status` (String) - The current status of the zone.
