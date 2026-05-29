@@ -186,6 +186,10 @@ func (r *ZoneResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	// Get zone from API
 	zone, err := r.client.GetZone(ctx, data.ID.ValueString())
 	if err != nil {
+		if client.IsNotFound(err) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read zone, got error: %s", err))
 		return
 	}
@@ -215,7 +219,9 @@ func (r *ZoneResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	}
 
 	// Create zone input for update
-	input := client.ZoneInput{}
+	input := client.ZoneInput{
+		Name: data.Name.ValueString(),
+	}
 
 	if !data.Type.IsNull() && !data.Type.IsUnknown() {
 		input.Type = data.Type.ValueString()
@@ -261,6 +267,9 @@ func (r *ZoneResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 	// Delete zone via API
 	err := r.client.DeleteZone(ctx, data.ID.ValueString())
 	if err != nil {
+		if client.IsNotFound(err) {
+			return
+		}
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete zone, got error: %s", err))
 		return
 	}

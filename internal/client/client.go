@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -20,6 +22,46 @@ type Client struct {
 	BaseURL    string
 	APIKey     string
 	HTTPClient *http.Client
+}
+
+// APIError captures structured DNScale API errors.
+type APIError struct {
+	StatusCode int
+	Code       string
+	Message    string
+	Body       string
+}
+
+func (e *APIError) Error() string {
+	if e == nil {
+		return ""
+	}
+
+	if e.Message != "" && e.Code != "" {
+		return fmt.Sprintf("API error: %s (code: %s)", e.Message, e.Code)
+	}
+	if e.Message != "" {
+		return fmt.Sprintf("API error: %s (status: %d)", e.Message, e.StatusCode)
+	}
+	if strings.TrimSpace(e.Body) != "" {
+		return fmt.Sprintf("API error: status %d, body: %s", e.StatusCode, strings.TrimSpace(e.Body))
+	}
+	return fmt.Sprintf("API error: status %d", e.StatusCode)
+}
+
+// IsNotFound returns true when an error represents a missing remote resource.
+func IsNotFound(err error) bool {
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+
+	if apiErr.StatusCode == http.StatusNotFound {
+		return true
+	}
+
+	code := strings.ToUpper(apiErr.Code)
+	return strings.Contains(code, "NOT_FOUND")
 }
 
 // NewClient creates a new DNScale API client
@@ -37,6 +79,16 @@ func NewClient(apiKey, baseURL string) *Client {
 	}
 }
 
+func (c *Client) requestURL(path string) string {
+	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
+		return path
+	}
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	return strings.TrimRight(c.BaseURL, "/") + path
+}
+
 // doRequest performs an HTTP request and returns the response body
 func (c *Client) doRequest(ctx context.Context, method, path string, body interface{}) ([]byte, error) {
 	var reqBody io.Reader
@@ -48,7 +100,7 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 		reqBody = bytes.NewBuffer(jsonBody)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, c.BaseURL+path, reqBody)
+	req, err := http.NewRequestWithContext(ctx, method, c.requestURL(path), reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -71,26 +123,43 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 	if resp.StatusCode >= 400 {
 		var errResp ErrorResponse
 		if err := json.Unmarshal(respBody, &errResp); err == nil && errResp.Error.Message != "" {
-			return nil, fmt.Errorf("API error: %s (code: %s)", errResp.Error.Message, errResp.Error.Code)
+			return nil, &APIError{
+				StatusCode: resp.StatusCode,
+				Code:       errResp.Error.Code,
+				Message:    errResp.Error.Message,
+				Body:       string(respBody),
+			}
 		}
-		return nil, fmt.Errorf("API error: status %d, body: %s", resp.StatusCode, string(respBody))
+		return nil, &APIError{
+			StatusCode: resp.StatusCode,
+			Body:       string(respBody),
+		}
 	}
 
 	return respBody, nil
+}
+
+func (c *Client) doJSON(ctx context.Context, method, path string, body interface{}, out interface{}) error {
+	respBody, err := c.doRequest(ctx, method, path, body)
+	if err != nil {
+		return err
+	}
+	if out == nil || len(strings.TrimSpace(string(respBody))) == 0 {
+		return nil
+	}
+	if err := json.Unmarshal(respBody, out); err != nil {
+		return fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+	return nil
 }
 
 // Zone Operations
 
 // CreateZone creates a new DNS zone
 func (c *Client) CreateZone(ctx context.Context, input ZoneInput) (*Zone, error) {
-	respBody, err := c.doRequest(ctx, http.MethodPost, "/v1/zones", input)
-	if err != nil {
-		return nil, err
-	}
-
 	var response ZoneAPIResponse
-	if err := json.Unmarshal(respBody, &response); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal zone response: %w", err)
+	if err := c.doJSON(ctx, http.MethodPost, "/v1/zones", input, &response); err != nil {
+		return nil, err
 	}
 
 	return &response.Data.Zone, nil
@@ -98,14 +167,9 @@ func (c *Client) CreateZone(ctx context.Context, input ZoneInput) (*Zone, error)
 
 // GetZone retrieves a zone by ID
 func (c *Client) GetZone(ctx context.Context, id string) (*Zone, error) {
-	respBody, err := c.doRequest(ctx, http.MethodGet, "/v1/zones/"+id, nil)
-	if err != nil {
-		return nil, err
-	}
-
 	var response ZoneAPIResponse
-	if err := json.Unmarshal(respBody, &response); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal zone response: %w", err)
+	if err := c.doJSON(ctx, http.MethodGet, "/v1/zones/"+id, nil, &response); err != nil {
+		return nil, err
 	}
 
 	return &response.Data.Zone, nil
@@ -129,14 +193,9 @@ func (c *Client) GetZoneByName(ctx context.Context, name string) (*Zone, error) 
 
 // UpdateZone updates an existing zone
 func (c *Client) UpdateZone(ctx context.Context, id string, input ZoneInput) (*Zone, error) {
-	respBody, err := c.doRequest(ctx, http.MethodPut, "/v1/zones/"+id, input)
-	if err != nil {
-		return nil, err
-	}
-
 	var response ZoneAPIResponse
-	if err := json.Unmarshal(respBody, &response); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal zone response: %w", err)
+	if err := c.doJSON(ctx, http.MethodPut, "/v1/zones/"+id, input, &response); err != nil {
+		return nil, err
 	}
 
 	return &response.Data.Zone, nil
@@ -150,20 +209,31 @@ func (c *Client) DeleteZone(ctx context.Context, id string) error {
 
 // ListZones lists all zones
 func (c *Client) ListZones(ctx context.Context) ([]Zone, error) {
-	respBody, err := c.doRequest(ctx, http.MethodGet, "/v1/zones", nil)
-	if err != nil {
-		return nil, err
+	var allZones []Zone
+	offset := 0
+	limit := 1000
+
+	for {
+		path := fmt.Sprintf("/v1/zones?offset=%d&limit=%d", offset, limit)
+		var response ZonesAPIResponse
+		if err := c.doJSON(ctx, http.MethodGet, path, nil, &response); err != nil {
+			return nil, err
+		}
+
+		if response.Data.Zones != nil {
+			allZones = append(allZones, response.Data.Zones...)
+		}
+
+		if len(response.Data.Zones) < limit {
+			break
+		}
+		offset += len(response.Data.Zones)
 	}
 
-	var response ZonesAPIResponse
-	if err := json.Unmarshal(respBody, &response); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal zones response: %w", err)
-	}
-
-	if response.Data.Zones == nil {
+	if allZones == nil {
 		return []Zone{}, nil
 	}
-	return response.Data.Zones, nil
+	return allZones, nil
 }
 
 // Record Operations
@@ -171,14 +241,9 @@ func (c *Client) ListZones(ctx context.Context) ([]Zone, error) {
 // CreateRecord creates a new DNS record
 func (c *Client) CreateRecord(ctx context.Context, zoneID string, input RecordInput) (*Record, error) {
 	path := fmt.Sprintf("/v1/zones/%s/records", zoneID)
-	respBody, err := c.doRequest(ctx, http.MethodPost, path, input)
-	if err != nil {
-		return nil, err
-	}
-
 	var response RecordAPIResponse
-	if err := json.Unmarshal(respBody, &response); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal record response: %w", err)
+	if err := c.doJSON(ctx, http.MethodPost, path, input, &response); err != nil {
+		return nil, err
 	}
 
 	return &response.Data.Record, nil
@@ -187,14 +252,9 @@ func (c *Client) CreateRecord(ctx context.Context, zoneID string, input RecordIn
 // GetRecord retrieves a record by ID
 func (c *Client) GetRecord(ctx context.Context, zoneID, recordID string) (*Record, error) {
 	path := fmt.Sprintf("/v1/zones/%s/records/%s", zoneID, recordID)
-	respBody, err := c.doRequest(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
 	var response RecordAPIResponse
-	if err := json.Unmarshal(respBody, &response); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal record response: %w", err)
+	if err := c.doJSON(ctx, http.MethodGet, path, nil, &response); err != nil {
+		return nil, err
 	}
 
 	return &response.Data.Record, nil
@@ -203,14 +263,9 @@ func (c *Client) GetRecord(ctx context.Context, zoneID, recordID string) (*Recor
 // UpdateRecord updates an existing record
 func (c *Client) UpdateRecord(ctx context.Context, zoneID, recordID string, input RecordInput) (*Record, error) {
 	path := fmt.Sprintf("/v1/zones/%s/records/%s", zoneID, recordID)
-	respBody, err := c.doRequest(ctx, http.MethodPut, path, input)
-	if err != nil {
-		return nil, err
-	}
-
 	var response RecordAPIResponse
-	if err := json.Unmarshal(respBody, &response); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal record response: %w", err)
+	if err := c.doJSON(ctx, http.MethodPut, path, input, &response); err != nil {
+		return nil, err
 	}
 
 	return &response.Data.Record, nil
@@ -231,14 +286,9 @@ func (c *Client) ListRecords(ctx context.Context, zoneID string) ([]Record, erro
 
 	for {
 		path := fmt.Sprintf("/v1/zones/%s/records?offset=%d&limit=%d", zoneID, offset, limit)
-		respBody, err := c.doRequest(ctx, http.MethodGet, path, nil)
-		if err != nil {
-			return nil, err
-		}
-
 		var response RecordsAPIResponse
-		if err := json.Unmarshal(respBody, &response); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal records response: %w", err)
+		if err := c.doJSON(ctx, http.MethodGet, path, nil, &response); err != nil {
+			return nil, err
 		}
 
 		if response.Data.Records != nil {
@@ -259,14 +309,9 @@ func (c *Client) ListRecords(ctx context.Context, zoneID string) ([]Record, erro
 // CreateCryptokey creates a new DNSSEC cryptokey
 func (c *Client) CreateCryptokey(ctx context.Context, zoneID string, input CryptokeyInput) (*Cryptokey, error) {
 	path := fmt.Sprintf("/v1/zones/%s/dnssec/cryptokeys", zoneID)
-	respBody, err := c.doRequest(ctx, http.MethodPost, path, input)
-	if err != nil {
-		return nil, err
-	}
-
 	var response CryptokeyAPIResponse
-	if err := json.Unmarshal(respBody, &response); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal cryptokey response: %w", err)
+	if err := c.doJSON(ctx, http.MethodPost, path, input, &response); err != nil {
+		return nil, err
 	}
 
 	return &response.Data.Cryptokey, nil
@@ -275,14 +320,9 @@ func (c *Client) CreateCryptokey(ctx context.Context, zoneID string, input Crypt
 // GetCryptokey retrieves a cryptokey by ID
 func (c *Client) GetCryptokey(ctx context.Context, zoneID string, keyID int) (*Cryptokey, error) {
 	path := fmt.Sprintf("/v1/zones/%s/dnssec/cryptokeys/%d", zoneID, keyID)
-	respBody, err := c.doRequest(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
 	var response CryptokeyAPIResponse
-	if err := json.Unmarshal(respBody, &response); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal cryptokey response: %w", err)
+	if err := c.doJSON(ctx, http.MethodGet, path, nil, &response); err != nil {
+		return nil, err
 	}
 
 	return &response.Data.Cryptokey, nil
@@ -296,12 +336,15 @@ func (c *Client) UpdateCryptokey(ctx context.Context, zoneID string, keyID int, 
 		return nil, err
 	}
 
-	var response CryptokeyAPIResponse
-	if err := json.Unmarshal(respBody, &response); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal cryptokey response: %w", err)
+	if len(strings.TrimSpace(string(respBody))) > 0 {
+		var response CryptokeyAPIResponse
+		if err := json.Unmarshal(respBody, &response); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal cryptokey response: %w", err)
+		}
+		return &response.Data.Cryptokey, nil
 	}
 
-	return &response.Data.Cryptokey, nil
+	return c.GetCryptokey(ctx, zoneID, keyID)
 }
 
 // DeleteCryptokey deletes a cryptokey
@@ -314,14 +357,9 @@ func (c *Client) DeleteCryptokey(ctx context.Context, zoneID string, keyID int) 
 // ListCryptokeys lists all cryptokeys in a zone
 func (c *Client) ListCryptokeys(ctx context.Context, zoneID string) ([]Cryptokey, error) {
 	path := fmt.Sprintf("/v1/zones/%s/dnssec/cryptokeys", zoneID)
-	respBody, err := c.doRequest(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return nil, err
-	}
-
 	var response CryptokeysAPIResponse
-	if err := json.Unmarshal(respBody, &response); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal cryptokeys response: %w", err)
+	if err := c.doJSON(ctx, http.MethodGet, path, nil, &response); err != nil {
+		return nil, err
 	}
 
 	if response.Data.Cryptokeys == nil {
@@ -333,15 +371,29 @@ func (c *Client) ListCryptokeys(ctx context.Context, zoneID string) ([]Cryptokey
 // GetDNSSECStatus gets the DNSSEC status of a zone
 func (c *Client) GetDNSSECStatus(ctx context.Context, zoneID string) (*DNSSECStatus, error) {
 	path := fmt.Sprintf("/v1/zones/%s/dnssec/status", zoneID)
-	respBody, err := c.doRequest(ctx, http.MethodGet, path, nil)
-	if err != nil {
+	var response DNSSECStatusAPIResponse
+	if err := c.doJSON(ctx, http.MethodGet, path, nil, &response); err != nil {
 		return nil, err
 	}
 
-	var response DNSSECStatusAPIResponse
-	if err := json.Unmarshal(respBody, &response); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal DNSSEC status response: %w", err)
+	status := &DNSSECStatus{
+		Enabled: response.Data.EnabledValue(),
 	}
 
-	return &response.Data, nil
+	keys, err := c.ListCryptokeys(ctx, zoneID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list DNSSEC keys while building DNSSEC status: %w", err)
+	}
+
+	status.KeysCount = len(keys)
+	for _, key := range keys {
+		switch strings.ToUpper(key.KeyType) {
+		case "KSK":
+			status.HasKSK = true
+		case "ZSK":
+			status.HasZSK = true
+		}
+	}
+
+	return status, nil
 }

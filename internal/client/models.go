@@ -66,7 +66,7 @@ type RecordsResponse struct {
 // Cryptokey represents a DNSSEC cryptokey
 type Cryptokey struct {
 	ID        int      `json:"id"`
-	KeyTag    int      `json:"keyTag"`
+	KeyTag    int      `json:"keytag"`
 	Active    bool     `json:"active"`
 	Published bool     `json:"published"`
 	KeyType   string   `json:"keytype"`
@@ -97,6 +97,21 @@ type DNSSECStatus struct {
 	KeysCount int  `json:"keys_count"`
 	HasKSK    bool `json:"has_ksk"`
 	HasZSK    bool `json:"has_zsk"`
+}
+
+type dnssecStatusData struct {
+	DNSSEC  *bool `json:"dnssec"`
+	Enabled *bool `json:"enabled"`
+}
+
+func (d dnssecStatusData) EnabledValue() bool {
+	if d.DNSSEC != nil {
+		return *d.DNSSEC
+	}
+	if d.Enabled != nil {
+		return *d.Enabled
+	}
+	return false
 }
 
 // ErrorResponse represents an API error response
@@ -161,6 +176,6 @@ type CryptokeysAPIResponse struct {
 
 // DNSSECStatusAPIResponse wraps a DNSSEC status response
 type DNSSECStatusAPIResponse struct {
-	Data   DNSSECStatus `json:"data"`
-	Status string       `json:"status"`
+	Data   dnssecStatusData `json:"data"`
+	Status string           `json:"status"`
 }

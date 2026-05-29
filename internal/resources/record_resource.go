@@ -123,12 +123,12 @@ func (r *RecordResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				Required:    true,
 			},
 			"ttl": schema.Int64Attribute{
-				Description: "Time-to-live in seconds. Default: 3600.",
+				Description: "Time-to-live in seconds. Must be between 300 and 86400. Default: 3600.",
 				Optional:    true,
 				Computed:    true,
 				Default:     int64default.StaticInt64(3600),
 				Validators: []validator.Int64{
-					int64validator.AtLeast(60),
+					int64validator.AtLeast(300),
 					int64validator.AtMost(86400),
 				},
 			},
@@ -243,6 +243,10 @@ func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, res
 	// Get record from API
 	record, err := r.client.GetRecord(ctx, data.ZoneID.ValueString(), data.ID.ValueString())
 	if err != nil {
+		if client.IsNotFound(err) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read record, got error: %s", err))
 		return
 	}
@@ -353,6 +357,9 @@ func (r *RecordResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	// Delete record via API
 	err := r.client.DeleteRecord(ctx, data.ZoneID.ValueString(), data.ID.ValueString())
 	if err != nil {
+		if client.IsNotFound(err) {
+			return
+		}
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete record, got error: %s", err))
 		return
 	}

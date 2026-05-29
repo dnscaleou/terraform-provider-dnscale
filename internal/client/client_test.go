@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -391,8 +392,28 @@ func TestAPIError(t *testing.T) {
 	if err == nil {
 		t.Fatal("CreateZone() expected error, got nil")
 	}
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("CreateZone() error type = %T, want *APIError", err)
+	}
+	if apiErr.StatusCode != http.StatusBadRequest {
+		t.Errorf("CreateZone() status = %d, want %d", apiErr.StatusCode, http.StatusBadRequest)
+	}
 	if err.Error() != "API error: Zone name is invalid (code: INVALID_INPUT)" {
 		t.Errorf("CreateZone() error = %v, want specific error message", err)
+	}
+}
+
+// TestIsNotFound tests not-found classification for state cleanup.
+func TestIsNotFound(t *testing.T) {
+	err := &APIError{
+		StatusCode: http.StatusNotFound,
+		Code:       "ZONE_NOT_FOUND",
+		Message:    "Zone not found",
+	}
+
+	if !IsNotFound(err) {
+		t.Fatal("IsNotFound() = false, want true")
 	}
 }
 
@@ -402,21 +423,35 @@ func TestGetDNSSECStatus(t *testing.T) {
 		if r.Method != http.MethodGet {
 			t.Errorf("expected GET, got %s", r.Method)
 		}
-		if r.URL.Path != "/v1/zones/zone-id/dnssec/status" {
-			t.Errorf("expected /v1/zones/zone-id/dnssec/status, got %s", r.URL.Path)
-		}
 
-		response := DNSSECStatusAPIResponse{
-			Data: DNSSECStatus{
-				Enabled:   true,
-				KeysCount: 2,
-				HasKSK:    true,
-				HasZSK:    true,
-			},
-			Status: "success",
+		switch r.URL.Path {
+		case "/v1/zones/zone-id/dnssec/status":
+			response := map[string]interface{}{
+				"status": "success",
+				"data": map[string]interface{}{
+					"dnssec": true,
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(response)
+		case "/v1/zones/zone-id/dnssec/cryptokeys":
+			response := CryptokeysAPIResponse{
+				Data: struct {
+					Cryptokeys []Cryptokey `json:"cryptokeys"`
+				}{
+					Cryptokeys: []Cryptokey{
+						{ID: 1, KeyType: "ksk"},
+						{ID: 2, KeyType: "zsk"},
+					},
+				},
+				Status: "success",
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(response)
+		default:
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
 		}
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
@@ -431,6 +466,12 @@ func TestGetDNSSECStatus(t *testing.T) {
 	}
 	if status.KeysCount != 2 {
 		t.Errorf("GetDNSSECStatus() KeysCount = %d, want 2", status.KeysCount)
+	}
+	if !status.HasKSK {
+		t.Error("GetDNSSECStatus() HasKSK = false, want true")
+	}
+	if !status.HasZSK {
+		t.Error("GetDNSSECStatus() HasZSK = false, want true")
 	}
 }
 
@@ -482,6 +523,64 @@ func TestCreateCryptokey(t *testing.T) {
 	}
 	if key.KeyType != "KSK" {
 		t.Errorf("CreateCryptokey() key.KeyType = %v, want KSK", key.KeyType)
+	}
+	if key.KeyTag != 12345 {
+		t.Errorf("CreateCryptokey() key.KeyTag = %d, want 12345", key.KeyTag)
+	}
+}
+
+// TestUpdateCryptokeyNoContent tests that 204 update responses are followed by a read.
+func TestUpdateCryptokeyNoContent(t *testing.T) {
+	var gotUpdate bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/zones/zone-id/dnssec/cryptokeys/1" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+
+		switch r.Method {
+		case http.MethodPut:
+			gotUpdate = true
+			w.WriteHeader(http.StatusNoContent)
+		case http.MethodGet:
+			response := CryptokeyAPIResponse{
+				Data: struct {
+					Cryptokey Cryptokey `json:"cryptokey"`
+				}{
+					Cryptokey: Cryptokey{
+						ID:        1,
+						KeyType:   "KSK",
+						Algorithm: "ECDSAP256SHA256",
+						Active:    false,
+						Published: true,
+					},
+				},
+				Status: "success",
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(response)
+		default:
+			t.Errorf("unexpected method: %s", r.Method)
+		}
+	}))
+	defer server.Close()
+
+	client := newTestClient(server)
+	active := false
+	key, err := client.UpdateCryptokey(context.Background(), "zone-id", 1, CryptokeyUpdate{
+		Active: &active,
+	})
+
+	if err != nil {
+		t.Fatalf("UpdateCryptokey() error = %v", err)
+	}
+	if !gotUpdate {
+		t.Fatal("UpdateCryptokey() did not issue PUT")
+	}
+	if key.ID != 1 {
+		t.Errorf("UpdateCryptokey() key.ID = %d, want 1", key.ID)
+	}
+	if key.Active {
+		t.Error("UpdateCryptokey() key.Active = true, want false")
 	}
 }
 

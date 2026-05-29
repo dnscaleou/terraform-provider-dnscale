@@ -108,7 +108,7 @@ resource "dnscale_record" "srv" {
 
 ### Optional
 
-- `ttl` (Number) - Time-to-live in seconds. Must be between 60 and 86400. Default: `3600`.
+- `ttl` (Number) - Time-to-live in seconds. Must be between 300 and 86400. Default: `3600`.
 - `priority` (Number) - Priority for MX and SRV records. Must be between 0 and 65535.
 - `disabled` (Boolean) - Whether the record is disabled. Default: `false`.
 

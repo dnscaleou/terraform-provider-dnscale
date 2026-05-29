@@ -208,6 +208,10 @@ func (r *DNSSECKeyResource) Read(ctx context.Context, req resource.ReadRequest, 
 	// Get cryptokey from API
 	key, err := r.client.GetCryptokey(ctx, data.ZoneID.ValueString(), int(data.ID.ValueInt64()))
 	if err != nil {
+		if client.IsNotFound(err) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read DNSSEC key, got error: %s", err))
 		return
 	}
@@ -295,6 +299,9 @@ func (r *DNSSECKeyResource) Delete(ctx context.Context, req resource.DeleteReque
 	// Delete cryptokey via API
 	err := r.client.DeleteCryptokey(ctx, data.ZoneID.ValueString(), int(data.ID.ValueInt64()))
 	if err != nil {
+		if client.IsNotFound(err) {
+			return
+		}
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete DNSSEC key, got error: %s", err))
 		return
 	}
