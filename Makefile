@@ -1,5 +1,5 @@
 HOSTNAME=registry.terraform.io
-NAMESPACE=dnscale
+NAMESPACE=dnscaleou
 NAME=dnscale
 BINARY=terraform-provider-${NAME}
 VERSION=1.0.0

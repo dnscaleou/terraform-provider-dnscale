@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     dnscale = {
-      source  = "dnscale/dnscale"
+      source  = "dnscaleou/dnscale"
       version = "~> 1.0"
     }
   }

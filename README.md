@@ -211,6 +211,10 @@ DNSCALE_API_KEY=your-key go test -v ./... -run TestAcc
 go generate ./...
 ```
 
+### Releasing
+
+Release and Terraform Registry publishing steps are documented in [docs/RELEASE.md](docs/RELEASE.md).
+
 ## License
 
 This project is licensed under the Mozilla Public License 2.0 - see the [LICENSE](LICENSE) file for details.

@@ -20,7 +20,7 @@ func main() {
 	flag.Parse()
 
 	opts := providerserver.ServeOpts{
-		Address: "registry.terraform.io/dnscale/dnscale",
+		Address: "registry.terraform.io/dnscaleou/dnscale",
 		Debug:   debug,
 	}
 
