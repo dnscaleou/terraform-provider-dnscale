@@ -48,6 +48,16 @@ type DNSSECKeyResourceModel struct {
 	DS        types.List   `tfsdk:"ds"`
 }
 
+func dnssecKeyTypeStateValue(configured types.String, apiKeyType string) types.String {
+	if !configured.IsNull() && !configured.IsUnknown() {
+		value := strings.ToUpper(configured.ValueString())
+		if value != "" {
+			return types.StringValue(value)
+		}
+	}
+	return types.StringValue(strings.ToUpper(apiKeyType))
+}
+
 func (r *DNSSECKeyResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_dnssec_key"
 }
@@ -68,13 +78,13 @@ func (r *DNSSECKeyResource) Schema(ctx context.Context, req resource.SchemaReque
 				},
 			},
 			"key_type": schema.StringAttribute{
-				Description: "Key type: KSK (Key-Signing-Key) or ZSK (Zone-Signing-Key).",
+				Description: "Key type: KSK (Key-Signing-Key), ZSK (Zone-Signing-Key), or CSK (Combined-Signing-Key).",
 				Required:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 				Validators: []validator.String{
-					stringvalidator.OneOf("KSK", "ZSK", "ksk", "zsk"),
+					stringvalidator.OneOf("KSK", "ZSK", "CSK", "ksk", "zsk", "csk"),
 				},
 			},
 			"algorithm": schema.StringAttribute{
@@ -177,7 +187,7 @@ func (r *DNSSECKeyResource) Create(ctx context.Context, req resource.CreateReque
 
 	// Map response to model
 	data.ID = types.Int64Value(int64(key.ID))
-	data.KeyType = types.StringValue(strings.ToUpper(key.KeyType))
+	data.KeyType = dnssecKeyTypeStateValue(data.KeyType, key.KeyType)
 	data.Algorithm = types.StringValue(key.Algorithm)
 	data.Bits = types.Int64Value(int64(key.Bits))
 	data.Active = types.BoolValue(key.Active)
@@ -218,7 +228,7 @@ func (r *DNSSECKeyResource) Read(ctx context.Context, req resource.ReadRequest, 
 
 	// Map response to model
 	data.ID = types.Int64Value(int64(key.ID))
-	data.KeyType = types.StringValue(strings.ToUpper(key.KeyType))
+	data.KeyType = dnssecKeyTypeStateValue(data.KeyType, key.KeyType)
 	data.Algorithm = types.StringValue(key.Algorithm)
 	data.Bits = types.Int64Value(int64(key.Bits))
 	data.Active = types.BoolValue(key.Active)
@@ -268,7 +278,7 @@ func (r *DNSSECKeyResource) Update(ctx context.Context, req resource.UpdateReque
 
 	// Map response to model
 	data.ID = types.Int64Value(int64(key.ID))
-	data.KeyType = types.StringValue(strings.ToUpper(key.KeyType))
+	data.KeyType = dnssecKeyTypeStateValue(data.KeyType, key.KeyType)
 	data.Algorithm = types.StringValue(key.Algorithm)
 	data.Bits = types.Int64Value(int64(key.Bits))
 	data.Active = types.BoolValue(key.Active)

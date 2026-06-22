@@ -37,3 +37,5 @@ output "has_ksk" {
 - `keys_count` (Number) - The number of DNSSEC keys configured.
 - `has_ksk` (Boolean) - Whether a Key Signing Key (KSK) is configured.
 - `has_zsk` (Boolean) - Whether a Zone Signing Key (ZSK) is configured.
+
+Combined Signing Keys (CSK) are reported as both `has_ksk` and `has_zsk`.

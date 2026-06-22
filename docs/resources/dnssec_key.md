@@ -37,6 +37,18 @@ resource "dnscale_dnssec_key" "zsk" {
 }
 ```
 
+### Combined Signing Key (CSK)
+
+```terraform
+resource "dnscale_dnssec_key" "csk" {
+  zone_id   = dnscale_zone.example.id
+  key_type  = "CSK"
+  algorithm = "ECDSAP256SHA256"
+  active    = true
+  published = true
+}
+```
+
 ### Complete DNSSEC Setup
 
 ```terraform
@@ -73,7 +85,7 @@ output "ds_records" {
 ### Required
 
 - `zone_id` (String) - Zone UUID that this key belongs to.
-- `key_type` (String) - Type of DNSSEC key. Valid values: `KSK` (Key Signing Key), `ZSK` (Zone Signing Key).
+- `key_type` (String) - Type of DNSSEC key. Valid values: `KSK` (Key Signing Key), `ZSK` (Zone Signing Key), `CSK` (Combined Signing Key).
 
 ### Optional
 

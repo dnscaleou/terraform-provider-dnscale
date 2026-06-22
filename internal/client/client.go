@@ -406,6 +406,9 @@ func (c *Client) GetDNSSECStatus(ctx context.Context, zoneID string) (*DNSSECSta
 			status.HasKSK = true
 		case "ZSK":
 			status.HasZSK = true
+		case "CSK":
+			status.HasKSK = true
+			status.HasZSK = true
 		}
 	}
 

@@ -531,6 +531,7 @@ func TestGetDNSSECStatus(t *testing.T) {
 					Cryptokeys: []Cryptokey{
 						{ID: 1, KeyType: "ksk"},
 						{ID: 2, KeyType: "zsk"},
+						{ID: 3, KeyType: "csk"},
 					},
 				},
 				Status: "success",
@@ -553,8 +554,8 @@ func TestGetDNSSECStatus(t *testing.T) {
 	if !status.Enabled {
 		t.Error("GetDNSSECStatus() Enabled = false, want true")
 	}
-	if status.KeysCount != 2 {
-		t.Errorf("GetDNSSECStatus() KeysCount = %d, want 2", status.KeysCount)
+	if status.KeysCount != 3 {
+		t.Errorf("GetDNSSECStatus() KeysCount = %d, want 3", status.KeysCount)
 	}
 	if !status.HasKSK {
 		t.Error("GetDNSSECStatus() HasKSK = false, want true")
