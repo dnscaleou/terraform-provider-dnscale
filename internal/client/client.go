@@ -211,7 +211,7 @@ func (c *Client) DeleteZone(ctx context.Context, id string) error {
 func (c *Client) ListZones(ctx context.Context) ([]Zone, error) {
 	var allZones []Zone
 	offset := 0
-	limit := 1000
+	limit := 100
 
 	for {
 		path := fmt.Sprintf("/v1/zones?offset=%d&limit=%d", offset, limit)
@@ -224,10 +224,24 @@ func (c *Client) ListZones(ctx context.Context) ([]Zone, error) {
 			allZones = append(allZones, response.Data.Zones...)
 		}
 
-		if len(response.Data.Zones) < limit {
+		pageCount := len(response.Data.Zones)
+		if pageCount == 0 {
 			break
 		}
-		offset += len(response.Data.Zones)
+		if response.Data.Pagination.HasMore != nil {
+			if !*response.Data.Pagination.HasMore {
+				break
+			}
+			offset += pageCount
+			continue
+		}
+		if response.Data.Pagination.Total > 0 && offset+pageCount >= response.Data.Pagination.Total {
+			break
+		}
+		if pageCount < limit {
+			break
+		}
+		offset += pageCount
 	}
 
 	if allZones == nil {

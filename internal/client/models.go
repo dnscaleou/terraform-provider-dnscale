@@ -30,10 +30,11 @@ type ZonesResponse struct {
 
 // Pagination represents pagination info
 type Pagination struct {
-	Total  int `json:"total"`
-	Offset int `json:"offset"`
-	Limit  int `json:"limit"`
-	Count  int `json:"count"`
+	Total   int   `json:"total"`
+	Offset  int   `json:"offset"`
+	Limit   int   `json:"limit"`
+	Count   int   `json:"count"`
+	HasMore *bool `json:"has_more"`
 }
 
 // Record represents a DNS record

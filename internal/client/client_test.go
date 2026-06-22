@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -211,6 +212,94 @@ func TestListZones(t *testing.T) {
 	if len(zones) != 2 {
 		t.Errorf("ListZones() returned %d zones, want 2", len(zones))
 	}
+}
+
+func TestListZonesPaginates(t *testing.T) {
+	total := 205
+	seenOffsets := []string{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("expected GET, got %s", r.Method)
+		}
+		if r.URL.Path != "/v1/zones" {
+			t.Errorf("expected /v1/zones, got %s", r.URL.Path)
+		}
+
+		offset := r.URL.Query().Get("offset")
+		limit := r.URL.Query().Get("limit")
+		if limit != "100" {
+			t.Errorf("expected limit=100, got %s", limit)
+		}
+		seenOffsets = append(seenOffsets, offset)
+
+		var zones []Zone
+		var pageOffset int
+		switch offset {
+		case "0":
+			pageOffset = 0
+			zones = makeZones(pageOffset, 100)
+		case "100":
+			pageOffset = 100
+			zones = makeZones(pageOffset, 100)
+		case "200":
+			pageOffset = 200
+			zones = makeZones(pageOffset, 5)
+		default:
+			t.Errorf("unexpected offset: %s", offset)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		response := ZonesAPIResponse{
+			Data: struct {
+				Zones      []Zone     `json:"zones"`
+				Pagination Pagination `json:"pagination"`
+			}{
+				Zones: zones,
+				Pagination: Pagination{
+					Total:   total,
+					Offset:  pageOffset,
+					Limit:   100,
+					Count:   len(zones),
+					HasMore: boolPtr(pageOffset+len(zones) < total),
+				},
+			},
+			Status: "success",
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	client := newTestClient(server)
+	zones, err := client.ListZones(context.Background())
+	if err != nil {
+		t.Fatalf("ListZones() error = %v", err)
+	}
+	if len(zones) != total {
+		t.Fatalf("ListZones() returned %d zones, want %d", len(zones), total)
+	}
+
+	wantOffsets := []string{"0", "100", "200"}
+	if fmt.Sprint(seenOffsets) != fmt.Sprint(wantOffsets) {
+		t.Fatalf("offsets = %v, want %v", seenOffsets, wantOffsets)
+	}
+}
+
+func makeZones(start, count int) []Zone {
+	zones := make([]Zone, count)
+	for i := range zones {
+		id := start + i
+		zones[i] = Zone{
+			ID:   fmt.Sprintf("zone-%d", id),
+			Name: fmt.Sprintf("example-%d.com", id),
+		}
+	}
+	return zones
+}
+
+func boolPtr(v bool) *bool {
+	return &v
 }
 
 // TestCreateRecord tests record creation
