@@ -92,9 +92,6 @@ func (r *RecordResource) Schema(ctx context.Context, req resource.SchemaRequest,
 			"id": schema.StringAttribute{
 				Description: "Record ID (base64 encoded).",
 				Computed:    true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
 			},
 			"zone_id": schema.StringAttribute{
 				Description: "Zone UUID that this record belongs to.",
