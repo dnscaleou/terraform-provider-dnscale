@@ -7,7 +7,7 @@ description: |-
 
 # dnscale_records (Data Source)
 
-Retrieves a list of all DNS records in a zone.
+Retrieves a list of all DNS records in a zone. The provider follows DNScale API pagination automatically, so zones with more than one API page of records are returned as a single combined `records` list.
 
 ## Example Usage
 
@@ -42,3 +42,7 @@ output "a_records" {
   - `ttl` (Number) - Time-to-live in seconds.
   - `priority` (Number) - Priority (for MX and SRV records).
   - `disabled` (Boolean) - Whether the record is disabled.
+
+## Pagination
+
+DNScale API responses include pagination metadata (`total`, `offset`, `limit`, `count`, and `has_more`). This data source requests records in 1000-record pages and continues until the API reports there are no more records. This covers large zones, including zones with more than 10,000 records.

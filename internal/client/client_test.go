@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 )
 
@@ -455,6 +456,162 @@ func TestListRecords(t *testing.T) {
 	}
 	if callCount != 1 {
 		t.Errorf("ListRecords() made %d API calls, want 1", callCount)
+	}
+}
+
+func TestListRecords_MoreThan10K(t *testing.T) {
+	const totalRecords = 10001
+	const pageLimit = 1000
+
+	var seenOffsets []int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("expected GET, got %s", r.Method)
+		}
+		if r.URL.Path != "/v1/zones/zone-id/records" {
+			t.Errorf("expected /v1/zones/zone-id/records, got %s", r.URL.Path)
+		}
+
+		offset, err := strconv.Atoi(r.URL.Query().Get("offset"))
+		if err != nil {
+			t.Fatalf("invalid offset query: %q", r.URL.Query().Get("offset"))
+		}
+		limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
+		if err != nil {
+			t.Fatalf("invalid limit query: %q", r.URL.Query().Get("limit"))
+		}
+		if limit != pageLimit {
+			t.Fatalf("limit = %d, want %d", limit, pageLimit)
+		}
+		seenOffsets = append(seenOffsets, offset)
+
+		remaining := totalRecords - offset
+		if remaining < 0 {
+			remaining = 0
+		}
+		count := min(limit, remaining)
+		records := make([]Record, count)
+		for i := 0; i < count; i++ {
+			n := offset + i
+			records[i] = Record{
+				ID:      fmt.Sprintf("record-%05d", n),
+				Name:    fmt.Sprintf("r%05d.example.com.", n),
+				Type:    "A",
+				Content: "192.0.2.1",
+				TTL:     300,
+			}
+		}
+
+		response := RecordsAPIResponse{
+			Data: struct {
+				Records    []Record   `json:"records"`
+				Pagination Pagination `json:"pagination"`
+			}{
+				Records: records,
+				Pagination: Pagination{
+					Total:  totalRecords,
+					Offset: offset,
+					Limit:  limit,
+					Count:  count,
+				},
+			},
+			Status: "success",
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	client := newTestClient(server)
+	records, err := client.ListRecords(context.Background(), "zone-id")
+
+	if err != nil {
+		t.Fatalf("ListRecords() error = %v", err)
+	}
+	if len(records) != totalRecords {
+		t.Fatalf("ListRecords() returned %d records, want %d", len(records), totalRecords)
+	}
+	if records[0].ID != "record-00000" {
+		t.Fatalf("first record ID = %q, want record-00000", records[0].ID)
+	}
+	if records[totalRecords-1].ID != "record-10000" {
+		t.Fatalf("last record ID = %q, want record-10000", records[totalRecords-1].ID)
+	}
+
+	wantOffsets := []int{0, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000}
+	if len(seenOffsets) != len(wantOffsets) {
+		t.Fatalf("offsets = %v, want %v", seenOffsets, wantOffsets)
+	}
+	for i := range wantOffsets {
+		if seenOffsets[i] != wantOffsets[i] {
+			t.Fatalf("offsets = %v, want %v", seenOffsets, wantOffsets)
+		}
+	}
+}
+
+func TestListRecords_UsesHasMoreWhenTotalMissing(t *testing.T) {
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		offset, err := strconv.Atoi(r.URL.Query().Get("offset"))
+		if err != nil {
+			t.Fatalf("invalid offset query: %q", r.URL.Query().Get("offset"))
+		}
+		limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
+		if err != nil {
+			t.Fatalf("invalid limit query: %q", r.URL.Query().Get("limit"))
+		}
+		callCount++
+
+		count := limit
+		hasMore := true
+		if offset >= limit {
+			count = 1
+			hasMore = false
+		}
+
+		records := make([]Record, count)
+		for i := 0; i < count; i++ {
+			n := offset + i
+			records[i] = Record{
+				ID:      fmt.Sprintf("record-%d", n),
+				Name:    fmt.Sprintf("r%d.example.com.", n),
+				Type:    "A",
+				Content: "192.0.2.1",
+				TTL:     300,
+			}
+		}
+
+		response := RecordsAPIResponse{
+			Data: struct {
+				Records    []Record   `json:"records"`
+				Pagination Pagination `json:"pagination"`
+			}{
+				Records: records,
+				Pagination: Pagination{
+					Offset:  offset,
+					Limit:   limit,
+					Count:   count,
+					HasMore: &hasMore,
+				},
+			},
+			Status: "success",
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	client := newTestClient(server)
+	records, err := client.ListRecords(context.Background(), "zone-id")
+
+	if err != nil {
+		t.Fatalf("ListRecords() error = %v", err)
+	}
+	if len(records) != 1001 {
+		t.Fatalf("ListRecords() returned %d records, want 1001", len(records))
+	}
+	if callCount != 2 {
+		t.Fatalf("ListRecords() made %d API calls, want 2", callCount)
 	}
 }
 

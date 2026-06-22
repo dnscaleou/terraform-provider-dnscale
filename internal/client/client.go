@@ -296,7 +296,7 @@ func (c *Client) DeleteRecord(ctx context.Context, zoneID, recordID string) erro
 func (c *Client) ListRecords(ctx context.Context, zoneID string) ([]Record, error) {
 	var allRecords []Record
 	offset := 0
-	limit := 100
+	limit := 1000
 
 	for {
 		path := fmt.Sprintf("/v1/zones/%s/records?offset=%d&limit=%d", zoneID, offset, limit)
@@ -309,12 +309,29 @@ func (c *Client) ListRecords(ctx context.Context, zoneID string) ([]Record, erro
 			allRecords = append(allRecords, response.Data.Records...)
 		}
 
-		if response.Data.Records == nil || len(response.Data.Records) < limit || offset+len(response.Data.Records) >= response.Data.Pagination.Total {
+		pageCount := len(response.Data.Records)
+		if pageCount == 0 {
 			break
 		}
-		offset += limit
+		if response.Data.Pagination.HasMore != nil {
+			if !*response.Data.Pagination.HasMore {
+				break
+			}
+			offset += pageCount
+			continue
+		}
+		if response.Data.Pagination.Total > 0 && offset+pageCount >= response.Data.Pagination.Total {
+			break
+		}
+		if pageCount < limit {
+			break
+		}
+		offset += pageCount
 	}
 
+	if allRecords == nil {
+		return []Record{}, nil
+	}
 	return allRecords, nil
 }
 

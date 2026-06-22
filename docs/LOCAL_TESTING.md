@@ -137,6 +137,29 @@ terraform plan -detailed-exitcode
 terraform destroy -auto-approve
 ```
 
+## Large zone acceptance test
+
+The `dnscale_records` data source has an opt-in live test for zones with more
+than 10,000 records. It creates a temporary zone, seeds A records through the
+DNScale API, then reads the zone through Terraform.
+
+This test is intentionally disabled by default because it creates many records
+and can take a long time:
+
+```bash
+TF_ACC=1 \
+DNSCALE_API_KEY='your-dnscale-api-key' \
+DNSCALE_RUN_LARGE_RECORD_TESTS=1 \
+go test ./internal/datasources -run TestAccRecordsDataSource_moreThan10K -count=1 -v
+```
+
+Optional controls:
+
+- `DNSCALE_LARGE_RECORD_COUNT` defaults to `10001` and must stay at or above
+  `10001`.
+- `DNSCALE_LARGE_RECORD_PARALLELISM` defaults to `8` and is capped at `32` by
+  the test.
+
 ## Cleanup
 
 After testing, remove the temporary workspace and clear the local environment
