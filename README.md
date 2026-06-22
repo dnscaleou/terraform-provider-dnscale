@@ -160,6 +160,8 @@ data "dnscale_dnssec_status" "example" {
 | `dnscale_records` | Lists all records in a zone |
 | `dnscale_dnssec_status` | Retrieves DNSSEC status for a zone |
 
+`dnscale_zones` follows DNScale API pagination automatically. The API returns `total`, `offset`, `limit`, `count`, and `has_more` metadata for `/v1/zones`; the provider reads all pages and exposes one combined `zones` list.
+
 ## Supported Record Types
 
 - A, AAAA

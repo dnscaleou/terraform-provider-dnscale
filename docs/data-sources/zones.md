@@ -7,7 +7,7 @@ description: |-
 
 # dnscale_zones (Data Source)
 
-Retrieves a list of all DNS zones in DNScale.
+Retrieves a list of all DNS zones in DNScale. The provider automatically follows the DNScale API's paginated `/v1/zones` response until every visible zone has been read.
 
 ## Example Usage
 
@@ -33,3 +33,7 @@ output "zone_names" {
   - `region` (String) - The region where the zone is hosted.
   - `type` (String) - The zone type.
   - `status` (String) - The current status of the zone.
+
+## Pagination
+
+DNScale API responses include pagination metadata (`total`, `offset`, `limit`, `count`, and `has_more`). This data source handles pagination internally, using the API maximum page size and requesting additional pages while `has_more` is true. Terraform configurations receive a single combined `zones` list.

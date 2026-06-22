@@ -106,10 +106,16 @@ func (r *RecordResource) Schema(ctx context.Context, req resource.SchemaRequest,
 			"name": schema.StringAttribute{
 				Description: "Full record name with trailing dot (e.g., www.example.com.).",
 				Required:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
 			"type": schema.StringAttribute{
 				Description: "DNS record type (A, AAAA, CNAME, MX, TXT, NS, SRV, CAA, PTR, ALIAS, TLSA, SSHFP, HTTPS, SVCB).",
 				Required:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 				Validators: []validator.String{
 					stringvalidator.OneOf(
 						"A", "AAAA", "CNAME", "MX", "TXT", "NS",
@@ -331,7 +337,7 @@ func (r *RecordResource) Update(ctx context.Context, req resource.UpdateRequest,
 		}
 	}
 
-	// Map response to model (ID may change if name/type/content changed)
+	// Map response to model (ID may change if content changed)
 	data.ID = types.StringValue(record.ID)
 	data.Name = types.StringValue(record.Name)
 	data.Type = types.StringValue(record.Type)
