@@ -108,11 +108,11 @@ func (r *RecordResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				Required:    true,
 			},
 			"type": schema.StringAttribute{
-				Description: "DNS record type (A, AAAA, CNAME, MX, TXT, NS, SOA, SRV, CAA, PTR, ALIAS, TLSA, SSHFP, HTTPS, SVCB).",
+				Description: "DNS record type (A, AAAA, CNAME, MX, TXT, NS, SRV, CAA, PTR, ALIAS, TLSA, SSHFP, HTTPS, SVCB).",
 				Required:    true,
 				Validators: []validator.String{
 					stringvalidator.OneOf(
-						"A", "AAAA", "CNAME", "MX", "TXT", "NS", "SOA",
+						"A", "AAAA", "CNAME", "MX", "TXT", "NS",
 						"SRV", "CAA", "PTR", "ALIAS", "TLSA", "SSHFP",
 						"HTTPS", "SVCB",
 					),

@@ -167,7 +167,6 @@ data "dnscale_dnssec_status" "example" {
 - MX
 - TXT
 - NS
-- SOA
 - SRV
 - CAA
 - PTR

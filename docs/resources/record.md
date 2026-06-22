@@ -103,7 +103,7 @@ resource "dnscale_record" "srv" {
 
 - `zone_id` (String) - Zone UUID that this record belongs to.
 - `name` (String) - Full record name with trailing dot (e.g., `www.example.com.`).
-- `type` (String) - DNS record type. Valid values: `A`, `AAAA`, `CNAME`, `MX`, `TXT`, `NS`, `SOA`, `SRV`, `CAA`, `PTR`, `ALIAS`, `TLSA`, `SSHFP`, `HTTPS`, `SVCB`.
+- `type` (String) - DNS record type. Valid values: `A`, `AAAA`, `CNAME`, `MX`, `TXT`, `NS`, `SRV`, `CAA`, `PTR`, `ALIAS`, `TLSA`, `SSHFP`, `HTTPS`, `SVCB`.
 - `content` (String) - Record value (IP address, hostname, text, etc.).
 
 ### Optional

@@ -24,13 +24,17 @@ resource "dnscale_zone" "example" {
 ### Required
 
 - `name` (String) - The domain name for the zone (e.g., `example.com`).
-- `region` (String) - The region where the zone will be hosted. Valid values: `EU`, `US`.
-- `type` (String) - The zone type. Valid values: `master`, `slave`.
+
+### Optional
+
+- `region` (String) - The region where the zone will be hosted. Valid values: `EU`, `GLOBAL`, `EU_GLOBAL`.
+- `type` (String) - The zone type. Valid values: `master`, `slave`. Default: `master`.
+- `status` (String) - The zone status. Valid values: `active`, `paused`, `pending`, `error`. Default: `active`.
 
 ### Read-Only
 
 - `id` (String) - The unique identifier for the zone (UUID).
-- `status` (String) - The current status of the zone.
+- `customer_id` (String) - Customer UUID that owns this zone.
 - `created_at` (String) - Timestamp when the zone was created.
 - `updated_at` (String) - Timestamp when the zone was last updated.
 
